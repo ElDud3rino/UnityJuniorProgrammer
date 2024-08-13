@@ -1,76 +1,101 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
+using System.IO;
+using TMPro;
+
+
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
+
+[System.Serializable]
+public class SaveData
+{
+    public string SelectedName = "NONAME";
+    public string HighscoreName = "No highscore available";
+    public int Highscore = 0;
+}
 
 public class MainManager : MonoBehaviour
 {
-    public Brick BrickPrefab;
-    public int LineCount = 6;
-    public Rigidbody Ball;
+    public static MainManager Instance { get; private set; }
 
-    public Text ScoreText;
-    public GameObject GameOverText;
-    
-    private bool m_Started = false;
-    private int m_Points;
-    
-    private bool m_GameOver = false;
+    public string PlayerName = "NONAME";
 
-    
-    // Start is called before the first frame update
-    void Start()
+
+    private void Awake()
     {
-        const float step = 0.6f;
-        int perLine = Mathf.FloorToInt(4.0f / step);
-        
-        int[] pointCountArray = new [] {1,1,2,2,5,5};
-        for (int i = 0; i < LineCount; ++i)
+        if (Instance != null)
         {
-            for (int x = 0; x < perLine; ++x)
+            return;
+        }
+
+        Instance = this;
+        DontDestroyOnLoad(gameObject);
+
+
+        GameObject nameTextObject = GameObject.Find("NameText");
+        if (nameTextObject != null)
+        {
+            TMP_InputField nameTextField = nameTextObject.GetComponent<TMP_InputField>();
+            if (nameTextField != null)
             {
-                Vector3 position = new Vector3(-1.5f + step * x, 2.5f + i * 0.3f, 0);
-                var brick = Instantiate(BrickPrefab, position, Quaternion.identity);
-                brick.PointValue = pointCountArray[i];
-                brick.onDestroyed.AddListener(AddPoint);
+                nameTextField.text = GetSaveData().SelectedName;
             }
         }
     }
 
-    private void Update()
-    {
-        if (!m_Started)
-        {
-            if (Input.GetKeyDown(KeyCode.Space))
-            {
-                m_Started = true;
-                float randomDirection = Random.Range(-1.0f, 1.0f);
-                Vector3 forceDir = new Vector3(randomDirection, 1, 0);
-                forceDir.Normalize();
 
-                Ball.transform.SetParent(null);
-                Ball.AddForce(forceDir * 2.0f, ForceMode.VelocityChange);
+    public void StartGame()
+    {
+        GameObject nameTextObject = GameObject.Find("NameText");
+        if (nameTextObject != null)
+        {
+            TMP_InputField nameTextField = nameTextObject.GetComponent<TMP_InputField>();
+            if (nameTextField != null)
+            {
+                PlayerName = nameTextField.text;
+                SaveData saveData = GetSaveData();
+                if(saveData.SelectedName != PlayerName)
+                {
+                    saveData.SelectedName = PlayerName;
+                    SaveData(saveData);
+                }
             }
         }
-        else if (m_GameOver)
+
+        SceneManager.LoadScene(1);
+    }
+    public void SaveData(SaveData saveData)
+    {
+        string filePath = Application.persistentDataPath + "/SaveData.json";
+        string json = JsonUtility.ToJson(saveData);
+        File.WriteAllText(filePath, json);
+    }
+
+    public SaveData GetSaveData()
+    {
+        string filePath = Application.persistentDataPath + "/SaveData.json";
+        if (File.Exists(filePath))
         {
-            if (Input.GetKeyDown(KeyCode.Space))
-            {
-                SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
-            }
+            string json = File.ReadAllText(filePath);
+            return JsonUtility.FromJson<SaveData>(json);
         }
+
+        return new SaveData();
     }
 
-    void AddPoint(int point)
+    public void ExitGame()
     {
-        m_Points += point;
-        ScoreText.text = $"Score : {m_Points}";
-    }
+        SaveData saveData = GetSaveData();
+        saveData.SelectedName = PlayerName;
+        SaveData(saveData);
 
-    public void GameOver()
-    {
-        m_GameOver = true;
-        GameOverText.SetActive(true);
+#if UNITY_EDITOR
+        EditorApplication.ExitPlaymode();
+#else
+        Application.Quit();
+#endif
     }
 }
